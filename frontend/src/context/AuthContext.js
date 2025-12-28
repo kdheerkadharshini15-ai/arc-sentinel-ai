@@ -54,6 +54,28 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Logout
+  const logout = useCallback(async () => {
+    try {
+      if (token) {
+        await axios.post(
+          `${API_URL}/api/auth/logout`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    } catch (error) {
+      // Ignore logout errors
+    } finally {
+      setToken(null);
+      setRefreshToken(null);
+      setUser(null);
+      localStorage.removeItem('arc_token');
+      localStorage.removeItem('arc_refresh_token');
+      localStorage.removeItem('arc_user');
+    }
+  }, [token]);
+
   // Refresh access token
   const refresh = useCallback(async () => {
     if (!refreshToken) return false;
@@ -73,33 +95,16 @@ export function AuthProvider({ children }) {
       
       return true;
     } catch (error) {
-      // Refresh failed, logout
-      logout();
-      return false;
-    }
-  }, [refreshToken]);
-
-  // Logout
-  const logout = async () => {
-    try {
-      if (token) {
-        await axios.post(
-          `${API_URL}/api/auth/logout`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      }
-    } catch (error) {
-      // Ignore logout errors
-    } finally {
+      // Refresh failed, clear tokens
       setToken(null);
       setRefreshToken(null);
       setUser(null);
       localStorage.removeItem('arc_token');
       localStorage.removeItem('arc_refresh_token');
       localStorage.removeItem('arc_user');
+      return false;
     }
-  };
+  }, [refreshToken]);
 
   // Request password reset
   const resetPassword = async (email) => {
