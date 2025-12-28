@@ -1,0 +1,31 @@
+# A.R.C SENTINEL - Render Deployment Configuration
+# =================================================
+# Single web service serving both frontend and backend
+
+services:
+  - type: web
+    name: arc-sentinel
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      chmod +x build.sh && ./build.sh
+    startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: NODE_VERSION
+        value: "18"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: DEBUG
+        value: "false"
+    healthCheckPath: /health

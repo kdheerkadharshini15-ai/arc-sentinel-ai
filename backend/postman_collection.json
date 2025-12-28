@@ -1,0 +1,524 @@
+{
+  "info": {
+    "_postman_id": "arc-sentinel-soc-collection",
+    "name": "A.R.C SENTINEL SOC Platform",
+    "description": "Complete API collection for A.R.C SENTINEL Security Operations Center Platform.\n\nFeatures:\n- Supabase Authentication\n- Event Processing Pipeline\n- Incident Management\n- ML Anomaly Detection\n- Forensics Capture\n- Gemini AI Integration\n- Automated Response Engine",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "testIncidentId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analyst@arc-sentinel.local\",\n  \"password\": \"SecureP@ss123!\",\n  \"full_name\": \"SOC Analyst\",\n  \"role\": \"analyst\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access_token) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+                  "    console.log('Token saved to collection variables');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"analyst@arc-sentinel.local\",\n  \"password\": \"SecureP@ss123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Get All Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events?page=1&page_size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Events Filtered",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events?severity=high&event_type=auth_failure",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"],
+              "query": [
+                {"key": "severity", "value": "high"},
+                {"key": "event_type", "value": "auth_failure"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get ML Flagged Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events?ml_flagged=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"],
+              "query": [
+                {"key": "ml_flagged", "value": "true"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "item": [
+        {
+          "name": "Get All Incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents?page=1&page_size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "page_size", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Critical Incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents?severity=critical",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents"],
+              "query": [
+                {"key": "severity", "value": "critical"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Manual Incident",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.collectionVariables.set('testIncidentId', jsonData.id);",
+                  "    console.log('Incident ID saved:', jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Suspicious Login Activity\",\n  \"description\": \"Multiple failed login attempts from external IP\",\n  \"severity\": \"high\",\n  \"threat_type\": \"brute_force\",\n  \"status\": \"open\",\n  \"source_ip\": \"45.33.32.156\",\n  \"indicators\": [\"failed_auth\", \"external_ip\", \"rapid_attempts\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents"]
+            }
+          }
+        },
+        {
+          "name": "Resolve Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolution\": \"False positive - automated security scan\",\n  \"notes\": \"Verified with security team\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents/{{testIncidentId}}/resolve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents", "{{testIncidentId}}", "resolve"]
+            }
+          }
+        },
+        {
+          "name": "Start Investigation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/incidents/{{testIncidentId}}/investigate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "incidents", "{{testIncidentId}}", "investigate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Forensics",
+      "item": [
+        {
+          "name": "Get Forensic Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/forensics/{{testIncidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "forensics", "{{testIncidentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Capture Forensic Snapshot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/forensics/{{testIncidentId}}/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "forensics", "{{testIncidentId}}", "capture"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Machine Learning",
+      "item": [
+        {
+          "name": "Get ML Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ml/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ml", "status"]
+            }
+          }
+        },
+        {
+          "name": "Predict Anomaly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"auth_failure\",\n  \"severity\": \"high\",\n  \"source_ip\": \"192.168.1.100\",\n  \"destination_port\": 22,\n  \"bytes_transferred\": 1500,\n  \"timestamp\": \"2025-01-15T02:30:00Z\",\n  \"details\": {\"attempts\": 15, \"username\": \"admin\"}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ml/predict",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ml", "predict"]
+            }
+          }
+        },
+        {
+          "name": "Train Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ml/train",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ml", "train"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Gemini AI",
+      "item": [
+        {
+          "name": "Summarize Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/gemini/summarize/{{testIncidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "gemini", "summarize", "{{testIncidentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Response Automation",
+      "item": [
+        {
+          "name": "Isolate Process",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/isolate-process/1234?incident_id={{testIncidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "isolate-process", "1234"],
+              "query": [
+                {"key": "incident_id", "value": "{{testIncidentId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Quarantine Device",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/quarantine-device?device_id=WORKSTATION-001&source_ip=192.168.1.100&incident_id={{testIncidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "quarantine-device"],
+              "query": [
+                {"key": "device_id", "value": "WORKSTATION-001"},
+                {"key": "source_ip", "value": "192.168.1.100"},
+                {"key": "incident_id", "value": "{{testIncidentId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke User Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/revoke-session/test-user-id?incident_id={{testIncidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "revoke-session", "test-user-id"],
+              "query": [
+                {"key": "incident_id", "value": "{{testIncidentId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Quarantined Devices",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/quarantined-devices",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "quarantined-devices"]
+            }
+          }
+        },
+        {
+          "name": "Get Isolated Processes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/isolated-processes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "isolated-processes"]
+            }
+          }
+        },
+        {
+          "name": "Get Response Action Log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{accessToken}}"}
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/response/action-log?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "response", "action-log"],
+              "query": [
+                {"key": "limit", "value": "50"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

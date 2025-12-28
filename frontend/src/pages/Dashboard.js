@@ -1,55 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Activity, AlertTriangle, Shield, TrendingUp, Eye } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
+import { getIncidentMetrics, getRecentEvents, getActiveIncidents } from '../services';
+import { useWebSocketFeed } from '../hooks/useWebSocketFeed';
 
 export default function Dashboard() {
-  const { token } = useAuth();
-  const [stats, setStats] = useState({ total_events: 0, total_incidents: 0, active_incidents: 0, ml_flagged: 0 });
+  const [stats, setStats] = useState({
+    total_events: 0,
+    total_incidents: 0,
+    active_incidents: 0,
+    ml_flagged: 0,
+  });
   const [events, setEvents] = useState([]);
   const [incidents, setIncidents] = useState([]);
-  const [ws, setWs] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-    connectWebSocket();
-    return () => ws?.close();
+  // Load dashboard data (non-blocking)
+  const loadData = useCallback(async () => {
+    try {
+      // Fire all requests in parallel - don't block UI
+      const [metricsResult, eventsResult, incidentsResult] = await Promise.allSettled([
+        getIncidentMetrics(),
+        getRecentEvents(10),
+        getActiveIncidents(5),
+      ]);
+
+      if (metricsResult.status === 'fulfilled' && !metricsResult.value.error) {
+        setStats(metricsResult.value);
+      }
+
+      if (eventsResult.status === 'fulfilled' && !eventsResult.value.error && eventsResult.value.events) {
+        setEvents(eventsResult.value.events);
+      }
+
+      if (incidentsResult.status === 'fulfilled' && !incidentsResult.value.error && incidentsResult.value.incidents) {
+        setIncidents(incidentsResult.value.incidents.filter(i => i.status === 'open' || i.status === 'active').slice(0, 5));
+      }
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+    }
   }, []);
 
-  const loadData = async () => {
-    try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const [statsRes, eventsRes, incidentsRes] = await Promise.all([
-        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/stats`, config),
-        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/events?limit=10`, config),
-        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/incidents`, config)
-      ]);
-      setStats(statsRes.data);
-      setEvents(eventsRes.data.events || []);
-      setIncidents(incidentsRes.data.incidents?.filter(i => i.status === 'active').slice(0, 5) || []);
-    } catch (err) {
-      console.error('Error loading data:', err);
-    }
-  };
+  // WebSocket handlers
+  const handleNewIncident = useCallback((incident) => {
+    setIncidents((prev) => [incident, ...prev].slice(0, 5));
+    loadData(); // Refresh metrics
+  }, [loadData]);
 
-  const connectWebSocket = () => {
-    const wsUrl = process.env.REACT_APP_BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-    const socket = new WebSocket(`${wsUrl}/api/events/live`);
-    
-    socket.onopen = () => console.log('WebSocket connected');
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'new_event') {
-        setEvents(prev => [data.data, ...prev.slice(0, 9)]);
-        loadData();
-      } else if (data.type === 'new_incident') {
-        setIncidents(prev => [data.data, ...prev.slice(0, 4)]);
-        loadData();
-      }
-    };
-    socket.onerror = (err) => console.error('WebSocket error:', err);
-    setWs(socket);
-  };
+  const handleCriticalAlert = useCallback((data) => {
+    console.log('Critical Alert:', data);
+    loadData(); // Refresh metrics
+  }, [loadData]);
+
+  // Connect WebSocket
+  const { connected } = useWebSocketFeed({
+    autoConnect: true,
+    onNewIncident: handleNewIncident,
+    onCriticalAlert: handleCriticalAlert,
+    onAnyMessage: () => loadData(), // Refresh on any message
+  });
+
+  // Initial load
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="bg-[#0f1419] border border-[#1e293b] rounded-xl p-6 hover:border-cyan-500/30 transition-all">
@@ -95,23 +108,25 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Live Event Feed</h2>
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-gray-400">LIVE</span>
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-xs text-gray-400">{connected ? 'LIVE' : 'DISCONNECTED'}</span>
             </div>
           </div>
           <div className="space-y-2 max-h-96 overflow-y-auto">
-            {events.map((event, idx) => (
+            {events.length > 0 ? events.map((event, idx) => (
               <div key={event.id || idx} className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-3 hover:border-cyan-500/30 transition-all">
                 <div className="flex items-start justify-between mb-1">
                   <span className={`text-xs px-2 py-1 rounded ${getSeverityColor(event.severity)}`}>
                     {event.severity?.toUpperCase()}
                   </span>
-                  <span className="text-xs text-gray-500">{new Date(event.timestamp).toLocaleTimeString()}</span>
+                  <span className="text-xs text-gray-500">{new Date(event.timestamp || event.created_at).toLocaleTimeString()}</span>
                 </div>
-                <p className="text-sm text-white font-medium">{event.type?.replace('_', ' ').toUpperCase()}</p>
+                <p className="text-sm text-white font-medium">{(event.type || event.event_type)?.replace('_', ' ').toUpperCase()}</p>
                 <p className="text-xs text-gray-400 mt-1">{event.source_ip}</p>
               </div>
-            ))}
+            )) : (
+              <p className="text-gray-500 text-center py-8">No events yet</p>
+            )}
           </div>
         </div>
 
@@ -129,8 +144,8 @@ export default function Dashboard() {
                     <Eye className="w-4 h-4" />
                   </a>
                 </div>
-                <p className="text-sm text-white font-medium mb-1">{incident.type?.replace('_', ' ').toUpperCase()}</p>
-                <p className="text-xs text-gray-400">{incident.description}</p>
+                <p className="text-sm text-white font-medium mb-1">{(incident.type || incident.threat_type)?.replace('_', ' ').toUpperCase()}</p>
+                <p className="text-xs text-gray-400">{incident.description || incident.title}</p>
               </div>
             )) : (
               <p className="text-gray-500 text-center py-8">No active incidents</p>

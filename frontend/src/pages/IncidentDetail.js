@@ -1,53 +1,131 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-import { Shield, CheckCircle, ArrowLeft, FileText, Activity } from 'lucide-react';
+import { Shield, CheckCircle, ArrowLeft, FileText, Activity, RefreshCw, Sparkles } from 'lucide-react';
+import { getIncidentById, resolveIncident } from '../services/incidents';
+import { getForensicReport, getGeminiSummary, parseForensicData } from '../services/reports';
+import { useToast } from '../hooks/use-toast';
 
 export default function IncidentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { toast } = useToast();
   const [incident, setIncident] = useState(null);
   const [report, setReport] = useState(null);
+  const [forensicData, setForensicData] = useState(null);
   const [notes, setNotes] = useState('');
   const [resolving, setResolving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+
+  const loadIncident = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [incidentRes, reportRes] = await Promise.all([
+        getIncidentById(id),
+        getForensicReport(id)
+      ]);
+      
+      if (!incidentRes.error) {
+        setIncident(incidentRes);
+      }
+      
+      if (!reportRes.error) {
+        setReport(reportRes);
+        setForensicData(parseForensicData(reportRes));
+      }
+    } catch (err) {
+      console.error('Error loading incident:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     loadIncident();
-  }, [id]);
-
-  const loadIncident = async () => {
-    try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const [incidentRes, reportRes] = await Promise.all([
-        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/incident/${id}`, config),
-        axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/report/${id}`, config).catch(() => ({ data: null }))
-      ]);
-      setIncident(incidentRes.data);
-      setReport(reportRes.data);
-    } catch (err) {
-      console.error('Error loading incident:', err);
-    }
-  };
+  }, [loadIncident]);
 
   const handleResolve = async () => {
     setResolving(true);
     try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/incident/${id}/resolve`, 
-        { resolution_notes: notes },
-        config
-      );
-      navigate('/incidents');
+      const result = await resolveIncident(id, notes);
+      
+      if (!result.error) {
+        toast({
+          title: 'Incident Resolved',
+          description: 'The incident has been marked as resolved.',
+        });
+        navigate('/incidents');
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to resolve incident',
+          variant: 'destructive',
+        });
+      }
     } catch (err) {
       console.error('Error resolving incident:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to resolve incident',
+        variant: 'destructive',
+      });
     } finally {
       setResolving(false);
     }
   };
 
-  if (!incident) return <div className="p-8 text-white">Loading...</div>;
+  const handleGenerateSummary = async () => {
+    setGeneratingSummary(true);
+    try {
+      const result = await getGeminiSummary(id);
+      
+      if (!result.error) {
+        toast({
+          title: 'AI Summary Generated',
+          description: 'Gemini analysis complete.',
+        });
+        // Reload to get updated data
+        loadIncident();
+      } else {
+        toast({
+          title: 'Error',
+          description: result.message || 'Failed to generate summary',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate AI summary',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4" />
+        <p>Loading incident details...</p>
+      </div>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        <p>Incident not found</p>
+        <button
+          onClick={() => navigate('/incidents')}
+          className="mt-4 text-cyan-400 hover:text-cyan-300"
+        >
+          Back to Incidents
+        </button>
+      </div>
+    );
+  }
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -124,10 +202,31 @@ export default function IncidentDetail() {
 
       {report && (
         <div className="bg-[#0f1419] border border-[#1e293b] rounded-xl p-8">
-          <div className="flex items-center space-x-3 mb-6">
-            <FileText className="w-6 h-6 text-cyan-400" />
-            <h2 className="text-xl font-bold text-white">Forensic Report</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <FileText className="w-6 h-6 text-cyan-400" />
+              <h2 className="text-xl font-bold text-white">Forensic Report</h2>
+            </div>
+            <button
+              onClick={handleGenerateSummary}
+              disabled={generatingSummary}
+              className="flex items-center space-x-2 px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/20 transition-all disabled:opacity-50"
+            >
+              <Sparkles className={`w-4 h-4 ${generatingSummary ? 'animate-pulse' : ''}`} />
+              <span>{generatingSummary ? 'Generating...' : 'AI Summary'}</span>
+            </button>
           </div>
+
+          {/* Gemini AI Summary */}
+          {forensicData?.summary && (
+            <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 mb-6">
+              <div className="flex items-center space-x-2 mb-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium text-purple-400">AI Analysis</span>
+              </div>
+              <p className="text-sm text-gray-300 whitespace-pre-wrap">{forensicData.summary}</p>
+            </div>
+          )}
 
           <div className="space-y-6">
             <div>
@@ -135,15 +234,15 @@ export default function IncidentDetail() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-4">
                   <p className="text-xs text-gray-400 mb-1">CPU Usage</p>
-                  <p className="text-lg text-white font-semibold">{report.forensic_data?.system_info?.cpu_percent?.toFixed(1)}%</p>
+                  <p className="text-lg text-white font-semibold">{report.forensic_data?.system_info?.cpu_percent?.toFixed(1) || 0}%</p>
                 </div>
                 <div className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-4">
                   <p className="text-xs text-gray-400 mb-1">Memory Usage</p>
-                  <p className="text-lg text-white font-semibold">{report.forensic_data?.system_info?.memory_percent?.toFixed(1)}%</p>
+                  <p className="text-lg text-white font-semibold">{report.forensic_data?.system_info?.memory_percent?.toFixed(1) || 0}%</p>
                 </div>
                 <div className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-4">
                   <p className="text-xs text-gray-400 mb-1">Active Processes</p>
-                  <p className="text-lg text-white font-semibold">{report.forensic_data?.processes?.length || 0}</p>
+                  <p className="text-lg text-white font-semibold">{forensicData?.processes?.length || 0}</p>
                 </div>
               </div>
             </div>
@@ -151,24 +250,32 @@ export default function IncidentDetail() {
             <div>
               <h3 className="text-sm font-semibold text-gray-300 mb-3">Suspicious Indicators</h3>
               <div className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-4 space-y-2">
-                {report.forensic_data?.suspicious_indicators?.map((indicator, idx) => (
-                  <div key={idx} className="flex items-center space-x-2 text-sm text-gray-300">
-                    <Activity className="w-4 h-4 text-orange-400" />
-                    <span>{indicator}</span>
-                  </div>
-                ))}
+                {report.forensic_data?.suspicious_indicators?.length > 0 ? (
+                  report.forensic_data.suspicious_indicators.map((indicator, idx) => (
+                    <div key={idx} className="flex items-center space-x-2 text-sm text-gray-300">
+                      <Activity className="w-4 h-4 text-orange-400" />
+                      <span>{indicator}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No suspicious indicators detected</p>
+                )}
               </div>
             </div>
 
             <div>
               <h3 className="text-sm font-semibold text-gray-300 mb-3">Recommended Actions</h3>
               <div className="bg-[#1a1f2e] border border-[#2d3748] rounded-lg p-4 space-y-2">
-                {report.forensic_data?.recommended_actions?.map((action, idx) => (
-                  <div key={idx} className="flex items-center space-x-2 text-sm text-gray-300">
-                    <CheckCircle className="w-4 h-4 text-cyan-400" />
-                    <span>{action}</span>
-                  </div>
-                ))}
+                {report.forensic_data?.recommended_actions?.length > 0 ? (
+                  report.forensic_data.recommended_actions.map((action, idx) => (
+                    <div key={idx} className="flex items-center space-x-2 text-sm text-gray-300">
+                      <CheckCircle className="w-4 h-4 text-cyan-400" />
+                      <span>{action}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No recommended actions</p>
+                )}
               </div>
             </div>
           </div>

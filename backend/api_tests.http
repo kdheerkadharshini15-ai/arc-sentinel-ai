@@ -1,0 +1,230 @@
+### ==========================================================================
+### A.R.C SENTINEL - REST API Test Suite
+### VS Code REST Client Extension Required
+### ==========================================================================
+
+@baseUrl = http://localhost:8000
+@contentType = application/json
+
+### ----- VARIABLES -----
+@accessToken = {{login.response.body.access_token}}
+@testIncidentId = 
+@testEventId = 
+
+
+### ==========================================================================
+### HEALTH CHECK
+### ==========================================================================
+
+### Health Check
+GET {{baseUrl}}/health
+
+
+### ==========================================================================
+### AUTHENTICATION
+### ==========================================================================
+
+### Register New User
+POST {{baseUrl}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "analyst@arc-sentinel.local",
+  "password": "SecureP@ss123!",
+  "full_name": "SOC Analyst",
+  "role": "analyst"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "analyst@arc-sentinel.local",
+  "password": "SecureP@ss123!"
+}
+
+### Get Current User Profile
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{accessToken}}
+
+### Logout
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### EVENTS
+### ==========================================================================
+
+### Get All Events (Paginated)
+GET {{baseUrl}}/api/events?page=1&page_size=20
+Authorization: Bearer {{accessToken}}
+
+### Get Events with Filters
+GET {{baseUrl}}/api/events?severity=high&event_type=auth_failure&source_ip=192.168.1.100
+Authorization: Bearer {{accessToken}}
+
+### Get Events by Date Range
+GET {{baseUrl}}/api/events?start_date=2025-01-01T00:00:00Z&end_date=2025-12-31T23:59:59Z
+Authorization: Bearer {{accessToken}}
+
+### Get ML Flagged Events Only
+GET {{baseUrl}}/api/events?ml_flagged=true
+Authorization: Bearer {{accessToken}}
+
+### Get Single Event
+GET {{baseUrl}}/api/events/{{testEventId}}
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### INCIDENTS
+### ==========================================================================
+
+### Get All Incidents (with Summary Metrics)
+GET {{baseUrl}}/api/incidents?page=1&page_size=20
+Authorization: Bearer {{accessToken}}
+
+### Get Incidents Filtered by Severity
+GET {{baseUrl}}/api/incidents?severity=critical
+Authorization: Bearer {{accessToken}}
+
+### Get Incidents by Status
+GET {{baseUrl}}/api/incidents?status=open
+Authorization: Bearer {{accessToken}}
+
+### Get Incidents by Threat Type
+GET {{baseUrl}}/api/incidents?threat_type=brute_force
+Authorization: Bearer {{accessToken}}
+
+### Get Single Incident
+GET {{baseUrl}}/api/incidents/{{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+### Create Manual Incident
+POST {{baseUrl}}/api/incidents
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "title": "Suspicious Login Activity",
+  "description": "Multiple failed login attempts from external IP",
+  "severity": "high",
+  "threat_type": "brute_force",
+  "status": "open",
+  "source_ip": "45.33.32.156",
+  "indicators": ["failed_auth", "external_ip", "rapid_attempts"]
+}
+
+### Update Incident Status
+PATCH {{baseUrl}}/api/incidents/{{testIncidentId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "status": "investigating",
+  "notes": "Assigned to senior analyst for review"
+}
+
+### Resolve Incident
+POST {{baseUrl}}/api/incidents/{{testIncidentId}}/resolve
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "resolution": "False positive - automated scanner from security vendor",
+  "notes": "IP verified as authorized penetration testing"
+}
+
+### Start Investigation on Incident
+POST {{baseUrl}}/api/incidents/{{testIncidentId}}/investigate
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### FORENSICS
+### ==========================================================================
+
+### Get Forensic Report for Incident
+GET {{baseUrl}}/api/forensics/{{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+### Capture Live Forensic Snapshot
+POST {{baseUrl}}/api/forensics/{{testIncidentId}}/capture
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### MACHINE LEARNING
+### ==========================================================================
+
+### Get ML Model Status
+GET {{baseUrl}}/api/ml/status
+Authorization: Bearer {{accessToken}}
+
+### Manually Predict on Event Data
+POST {{baseUrl}}/api/ml/predict
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "event_type": "auth_failure",
+  "severity": "high",
+  "source_ip": "192.168.1.100",
+  "destination_port": 22,
+  "bytes_transferred": 1500,
+  "timestamp": "2025-01-15T02:30:00Z",
+  "details": {"attempts": 15, "username": "admin"}
+}
+
+### Trigger Manual Model Training
+POST {{baseUrl}}/api/ml/train
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### GEMINI AI
+### ==========================================================================
+
+### Generate AI Summary for Incident
+POST {{baseUrl}}/api/gemini/summarize/{{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### RESPONSE AUTOMATION
+### ==========================================================================
+
+### Isolate a Process by PID
+POST {{baseUrl}}/api/response/isolate-process/1234?incident_id={{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+### Quarantine a Device
+POST {{baseUrl}}/api/response/quarantine-device?device_id=WORKSTATION-001&source_ip=192.168.1.100&incident_id={{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+### Revoke User Session
+POST {{baseUrl}}/api/response/revoke-session/user-uuid-here?incident_id={{testIncidentId}}
+Authorization: Bearer {{accessToken}}
+
+### Get Quarantined Devices List
+GET {{baseUrl}}/api/response/quarantined-devices
+Authorization: Bearer {{accessToken}}
+
+### Get Isolated Processes List
+GET {{baseUrl}}/api/response/isolated-processes
+Authorization: Bearer {{accessToken}}
+
+### Get Response Action Log
+GET {{baseUrl}}/api/response/action-log?limit=50
+Authorization: Bearer {{accessToken}}
+
+
+### ==========================================================================
+### WEBSOCKET TESTING (Manual - use browser console or wscat)
+### ==========================================================================
+# Connect: wscat -c ws://localhost:8000/ws
+# Or in browser: new WebSocket("ws://localhost:8000/ws")
+# Messages broadcast: new_incident, incident_resolved, critical_alert, device_quarantined

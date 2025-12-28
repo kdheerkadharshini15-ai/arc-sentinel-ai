@@ -1,28 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-import { AlertTriangle, Filter } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AlertTriangle, Filter, RefreshCw } from 'lucide-react';
+import { getEvents } from '../services';
 
 export default function Alerts() {
-  const { token } = useAuth();
   const [events, setEvents] = useState([]);
-  const [filter, setFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getEvents({
+        pageSize: 200,
+        severity: severityFilter !== 'all' ? severityFilter : undefined,
+        eventType: typeFilter !== 'all' ? typeFilter : undefined,
+      });
+
+      if (!result.error && result.events) {
+        setEvents(result.events);
+      }
+    } catch (err) {
+      console.error('Error loading events:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [severityFilter, typeFilter]);
 
   useEffect(() => {
     loadEvents();
-  }, []);
-
-  const loadEvents = async () => {
-    try {
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      const res = await axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/events?limit=200`, config);
-      setEvents(res.data.events || []);
-    } catch (err) {
-      console.error('Error loading events:', err);
-    }
-  };
-
-  const filteredEvents = events.filter(e => filter === 'all' || e.severity === filter);
+  }, [loadEvents]);
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -41,11 +48,18 @@ export default function Alerts() {
           <p className="text-gray-400">All security events and telemetry data</p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={loadEvents}
+            disabled={loading}
+            className="p-2 bg-[#0f1419] border border-[#2d3748] rounded-lg text-gray-400 hover:text-white hover:border-cyan-500 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
           <Filter className="w-5 h-5 text-gray-400" />
           <select
             data-testid="severity-filter"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
             className="bg-[#0f1419] border border-[#2d3748] text-white rounded-lg px-4 py-2 focus:outline-none focus:border-cyan-500"
           >
             <option value="all">All Severities</option>
@@ -70,25 +84,35 @@ export default function Alerts() {
               </tr>
             </thead>
             <tbody data-testid="events-table">
-              {filteredEvents.map((event, idx) => (
-                <tr key={event.id || idx} className="border-b border-[#1e293b] hover:bg-[#1a1f2e] transition-colors">
-                  <td className="px-6 py-4 text-sm text-gray-300">
-                    {new Date(event.timestamp).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-white font-medium">
-                    {event.type?.replace('_', ' ').toUpperCase()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-300 font-mono">{event.source_ip}</td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-3 py-1 rounded-full border ${getSeverityColor(event.severity)}`}>
-                      {event.severity?.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-400">
-                    {JSON.stringify(event.details).slice(0, 50)}...
+              {events.length > 0 ? (
+                events.map((event, idx) => (
+                  <tr key={event.id || idx} className="border-b border-[#1e293b] hover:bg-[#1a1f2e] transition-colors">
+                    <td className="px-6 py-4 text-sm text-gray-300">
+                      {new Date(event.timestamp || event.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-white font-medium">
+                      {(event.type || event.event_type)?.replace('_', ' ').toUpperCase()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-300 font-mono">{event.source_ip}</td>
+                    <td className="px-6 py-4">
+                      <span className={`text-xs px-3 py-1 rounded-full border ${getSeverityColor(event.severity)}`}>
+                        {event.severity?.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-400">
+                      {typeof event.details === 'object' 
+                        ? JSON.stringify(event.details).slice(0, 50) 
+                        : String(event.details || '').slice(0, 50)}...
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                    {loading ? 'Loading...' : 'No events yet. Use Attack Simulator to generate events.'}
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
