@@ -9,8 +9,12 @@ services:
     region: oregon
     plan: free
     buildCommand: |
-      chmod +x build.sh && ./build.sh
-    startCommand: cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT
+      pip install --upgrade pip
+      cd backend && pip install -r requirements.txt
+      cd ../frontend && npm ci --legacy-peer-deps && npm run build
+      rm -rf ../backend/static && mkdir -p ../backend/static
+      cp -r build/* ../backend/static/
+    startCommand: cd backend && python -m uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"

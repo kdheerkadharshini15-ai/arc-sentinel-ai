@@ -9,11 +9,18 @@ echo "=== A.R.C SENTINEL Build Script ==="
 # Navigate to project root (works on Render)
 cd /opt/render/project/src 2>/dev/null || cd "$(dirname "$0")"
 
+# Upgrade pip
+pip install --upgrade pip
+
 # Install Python dependencies
 echo "Installing Python dependencies..."
 cd backend
-pip install --upgrade pip
 pip install -r requirements.txt
+
+# Test import to make sure everything works
+echo "Testing Python imports..."
+python -c "from app.config import settings; print('Config loaded OK')"
+python -c "from app.main import app; print('App loaded OK')"
 
 # Build React frontend
 echo "Building React frontend..."
