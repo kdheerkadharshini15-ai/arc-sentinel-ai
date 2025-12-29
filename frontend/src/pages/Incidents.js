@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, XCircle, Eye, Clock, RefreshCw } from 'lucide-react';
 import { getIncidents, resolveIncident as resolveIncidentApi } from '../services';
 import { useToast } from '../hooks/use-toast';
+import { DEMO_MODE } from '../constants';
 
 export default function Incidents() {
   const navigate = useNavigate();
@@ -14,6 +15,23 @@ export default function Incidents() {
   const [resolvingId, setResolvingId] = useState(null);
 
   const loadIncidents = useCallback(async () => {
+    // DEMO MODE: Load only from localStorage (populated by simulator)
+    if (DEMO_MODE) {
+      let storedIncidents = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      
+      // Apply filters
+      if (statusFilter !== 'all') {
+        storedIncidents = storedIncidents.filter(i => i.status === statusFilter || 
+          (statusFilter === 'open' && i.status === 'active'));
+      }
+      if (severityFilter !== 'all') {
+        storedIncidents = storedIncidents.filter(i => i.severity === severityFilter);
+      }
+      
+      setIncidents(storedIncidents);
+      return;
+    }
+    
     setLoading(true);
     try {
       const result = await getIncidents({
@@ -38,6 +56,27 @@ export default function Incidents() {
 
   const handleResolve = async (incidentId) => {
     setResolvingId(incidentId);
+    
+    // DEMO MODE: Update locally
+    if (DEMO_MODE) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Update in localStorage
+      const stored = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      const updated = stored.map(i => i.id === incidentId ? { ...i, status: 'resolved' } : i);
+      localStorage.setItem('arc_demo_incidents', JSON.stringify(updated));
+      
+      // Update local state
+      setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'resolved' } : i));
+      
+      toast({
+        title: 'Incident Resolved',
+        description: 'The incident has been successfully resolved.',
+      });
+      setResolvingId(null);
+      return;
+    }
+    
     try {
       const result = await resolveIncidentApi(incidentId, 'Resolved via dashboard');
       

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { DEMO_MODE } from '../constants';
 
 const AuthContext = createContext();
 
@@ -17,6 +18,11 @@ export function AuthProvider({ children }) {
 
   // Signup with email verification
   const signup = async (email, password) => {
+    // DEMO MODE: Accept any signup
+    if (DEMO_MODE) {
+      return { message: 'Account created successfully', user: { email } };
+    }
+    
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/api/auth/signup`, {
@@ -31,6 +37,23 @@ export function AuthProvider({ children }) {
 
   // Login with Supabase Auth
   const login = async (email, password) => {
+    // DEMO MODE: Accept any credentials
+    if (DEMO_MODE) {
+      const demoToken = 'demo_token_' + Date.now();
+      const demoRefresh = 'demo_refresh_' + Date.now();
+      const demoUser = { id: 1, email: email || 'demo@arcsentinel.io', role: 'admin' };
+      
+      setToken(demoToken);
+      setRefreshToken(demoRefresh);
+      setUser(demoUser);
+      
+      localStorage.setItem('arc_token', demoToken);
+      localStorage.setItem('arc_refresh_token', demoRefresh);
+      localStorage.setItem('arc_user', JSON.stringify(demoUser));
+      
+      return { access_token: demoToken, refresh_token: demoRefresh, user: demoUser };
+    }
+    
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/api/auth/login`, {

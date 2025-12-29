@@ -84,12 +84,16 @@ export const ATTACK_METADATA = [
  */
 export async function simulateAttack(attackType, target = '192.168.1.100') {
   try {
+    console.log('[Simulator] Sending attack:', attackType, 'to target:', target);
     const response = await api.post('/api/simulate/attack', {
       attack_type: attackType,
-      target,
+      target: target,
+      intensity: 1
     });
+    console.log('[Simulator] Response:', response.data);
     return response.data;
   } catch (error) {
+    console.error('[Simulator] Error:', error.response?.data || error.message);
     return handleApiError(error);
   }
 }

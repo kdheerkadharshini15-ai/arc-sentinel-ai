@@ -6,7 +6,7 @@ Manages real-time WebSocket connections for live event streaming
 
 from fastapi import WebSocket
 from typing import List, Dict, Any
-import json
+from datetime import datetime
 import asyncio
 
 
@@ -31,22 +31,65 @@ class ConnectionManager:
                 self.active_connections.remove(websocket)
         print(f"[WS] Connection closed. Total: {len(self.active_connections)}")
     
-    async def broadcast(self, message: Dict[str, Any]):
-        """Broadcast a message to all connected clients"""
+    async def broadcast(self, message: Dict[str, Any], message_type: str = None):
+        """
+        Broadcast a structured message to all connected clients.
+        
+        Args:
+            message: dict payload (can include 'type' and 'data' keys, or be wrapped)
+            message_type: Optional override - "NEW_EVENT" | "NEW_INCIDENT" | "INCIDENT_RESOLVED"
+        
+        Payload format sent to clients:
+        {
+            "type": "NEW_EVENT" | "NEW_INCIDENT" | "INCIDENT_RESOLVED",
+            "event": "NEW_EVENT" (uppercase alias),
+            "data": {...},
+            "timestamp": "ISO timestamp"
+        }
+        """
         if not self.active_connections:
             return
         
-        disconnected = []
+        # Build structured payload
+        if message_type:
+            # Wrap with explicit type
+            payload = {
+                "type": message_type.lower().replace("_", "_"),  # e.g., "new_event"
+                "event": message_type.upper(),  # e.g., "NEW_EVENT"
+                "data": message,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        elif "type" in message and "data" in message:
+            # Already structured, add timestamp and uppercase event
+            payload = {
+                **message,
+                "event": message.get("type", "unknown").upper().replace("-", "_"),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            # Raw message, wrap as NEW_EVENT
+            payload = {
+                "type": "new_event",
+                "event": "NEW_EVENT",
+                "data": message,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        dead = []
         async with self._lock:
-            for connection in self.active_connections:
+            for connection in list(self.active_connections):
                 try:
-                    await connection.send_json(message)
+                    await connection.send_json(payload)
                 except Exception as e:
                     print(f"[WS] Error sending message: {e}")
-                    disconnected.append(connection)
+                    dead.append(connection)
             
             # Clean up disconnected clients
-            for conn in disconnected:
+            for conn in dead:
+                try:
+                    await conn.close()
+                except Exception:
+                    pass
                 if conn in self.active_connections:
                     self.active_connections.remove(conn)
     

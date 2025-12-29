@@ -1,16 +1,62 @@
 """
 A.R.C SENTINEL - Gemini AI Integration
 ========================================
-Google Gemini API integration for intelligent incident summarization
+Google Gemini API integration for intelligent incident summarization.
+Gracefully degrades if Gemini is unavailable or API key is missing.
+DEMO MODE: Returns hardcoded summaries when enabled.
+
+Supports both:
+- google-generativeai (deprecated but widely used)
+- google-genai (new recommended package)
 """
 
-import google.generativeai as genai
 from typing import Dict, Any, Optional
 import json
 import asyncio
+import os
+import warnings
 from functools import partial
 
+# Import demo mode config
+try:
+    from app.config.demo_mode import DEMO_MODE, DEMO_GEMINI_SUMMARY
+except ImportError:
+    DEMO_MODE = False
+    DEMO_GEMINI_SUMMARY = "AI analysis unavailable in non-demo mode."
+
+# Suppress deprecation warnings from google-generativeai
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
+# Try to import Gemini - support both old and new packages
+genai = None
+GEMINI_AVAILABLE = False
+GEMINI_VERSION = None
+
+# Try new package first (google-genai)
+try:
+    from google import genai as new_genai
+    genai = new_genai
+    GEMINI_AVAILABLE = True
+    GEMINI_VERSION = "new"
+    print("[GEMINI] Using google-genai (new package)")
+except ImportError:
+    pass
+
+# Fallback to old package (google-generativeai)
+if not GEMINI_AVAILABLE:
+    try:
+        import google.generativeai as old_genai
+        genai = old_genai
+        GEMINI_AVAILABLE = True
+        GEMINI_VERSION = "legacy"
+        print("[GEMINI] Using google-generativeai (legacy package)")
+    except ImportError:
+        print("[GEMINI] No Gemini package installed. AI summaries disabled.")
+
 from app.config import settings
+
+# Get API key from settings or environment
+GEMINI_API_KEY = getattr(settings, "GEMINI_API_KEY", None) or os.environ.get("GEMINI_API_KEY")
 
 
 class GeminiClient:
@@ -18,6 +64,11 @@ class GeminiClient:
     Client for Google Gemini AI API.
     Provides intelligent summarization of forensic reports and incidents.
     Uses gemini-pro model with temperature 0.2 for consistent analysis.
+    
+    IMPORTANT: Gracefully degrades if Gemini is unavailable:
+    - If google-generativeai not installed: Returns fallback summary
+    - If API key not configured: Returns fallback summary
+    - If API call fails: Returns fallback summary with error info
     """
     
     def __init__(self):
@@ -26,26 +77,35 @@ class GeminiClient:
         self._configure()
     
     def _configure(self):
-        """Configure Gemini API with credentials"""
-        if settings.GEMINI_API_KEY:
-            try:
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                # Configure model with temperature 0.2 for consistent, factual output
-                generation_config = genai.types.GenerationConfig(
-                    temperature=0.2,
-                    top_p=0.8,
-                    top_k=40,
-                    max_output_tokens=2048
-                )
-                self.model = genai.GenerativeModel(
-                    'gemini-pro',
-                    generation_config=generation_config
-                )
-                self.is_configured = True
-                print("[GEMINI] API configured successfully (temperature=0.2)")
-            except Exception as e:
-                print(f"[GEMINI] Configuration error: {e}")
-                self.is_configured = False
+        """Configure Gemini API with credentials. Never crashes."""
+        if not GEMINI_AVAILABLE:
+            print("[GEMINI] Library not available. Summaries will use fallback.")
+            self.is_configured = False
+            return
+            
+        if not GEMINI_API_KEY:
+            print("[GEMINI] No API key configured. Summaries will use fallback.")
+            self.is_configured = False
+            return
+            
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            # Configure model with temperature 0.2 for consistent, factual output
+            generation_config = genai.types.GenerationConfig(
+                temperature=0.2,
+                top_p=0.8,
+                top_k=40,
+                max_output_tokens=2048
+            )
+            self.model = genai.GenerativeModel(
+                'gemini-pro',
+                generation_config=generation_config
+            )
+            self.is_configured = True
+            print("[GEMINI] API configured successfully (temperature=0.2)")
+        except Exception as e:
+            print(f"[GEMINI] Configuration error: {e}")
+            self.is_configured = False
     
     async def summarize_incident(
         self,
@@ -58,7 +118,14 @@ class GeminiClient:
         
         Prompt format: "Summarize forensic snapshot for IR analysis. 
         Provide remediation in 5 bullets."
+        
+        Falls back to basic summary if Gemini is unavailable.
+        DEMO MODE: Returns hardcoded summary.
         """
+        # DEMO MODE: Return hardcoded summary
+        if DEMO_MODE:
+            return DEMO_GEMINI_SUMMARY
+        
         if not self.is_configured or not self.model:
             return self._generate_fallback_summary(incident, forensic_data)
         
@@ -79,7 +146,8 @@ class GeminiClient:
                 
         except Exception as e:
             print(f"[GEMINI] Summarization error: {e}")
-            return self._generate_fallback_summary(incident, forensic_data)
+            # Return fallback message when Gemini fails
+            return "Gemini unavailable. Summary not generated. " + self._generate_fallback_summary(incident, forensic_data)
     
     def _build_summary_prompt(
         self,
@@ -166,8 +234,33 @@ Be specific and actionable. Avoid generic advice.
         incident_type: str
     ) -> str:
         """Analyze a pattern of events for threat intelligence"""
+        # DEMO MODE: Return hardcoded analysis
+        if DEMO_MODE:
+            return f"""## Threat Pattern Analysis
+
+**Pattern Confidence:** HIGH
+**Incident Type:** {incident_type}
+
+### Attack Stage
+This appears to be in the **Execution/Persistence** phase of the attack lifecycle.
+
+### Threat Actor TTPs
+- T1078: Valid Accounts - Credential abuse detected
+- T1059: Command and Scripting Interpreter - PowerShell execution
+- T1071: Application Layer Protocol - C2 communication over HTTPS
+
+### Immediate Actions
+1. Isolate affected hosts from the network immediately
+2. Reset credentials for compromised accounts
+3. Block identified C2 IP addresses at the firewall
+
+### MITRE ATT&CK Mapping
+- TA0001 (Initial Access), TA0002 (Execution), TA0003 (Persistence)
+
+*This is a demo mode analysis.*"""
+        
         if not self.is_configured or not self.model:
-            return "AI analysis unavailable - API not configured"
+            return "Gemini unavailable. AI analysis not available - API not configured."
         
         try:
             events_summary = json.dumps(events[:10], indent=2, default=str)
@@ -195,11 +288,11 @@ Be specific and reference actual data from the events.
                 partial(self.model.generate_content, prompt)
             )
             
-            return response.text if response and response.text else "Analysis unavailable"
+            return response.text if response and response.text else "Gemini unavailable. Analysis not available."
             
         except Exception as e:
             print(f"[GEMINI] Pattern analysis error: {e}")
-            return f"Analysis error: {str(e)}"
+            return f"Gemini unavailable. Summary not generated. Analysis error: {str(e)}"
     
     def _generate_fallback_summary(
         self,

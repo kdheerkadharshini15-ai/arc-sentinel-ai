@@ -2,28 +2,15 @@
  * A.R.C SENTINEL - WebSocket Feed Hook
  * =====================================
  * React hook for real-time WebSocket data
+ * DEMO MODE: Simulates WebSocket events locally
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { connectWebSocket, closeWebSocket, isWebSocketConnected } from '../services/websocket';
+import { DEMO_MODE } from '../constants';
 
 /**
  * Custom hook for WebSocket feed
- * @param {object} options - Hook options
- * @param {boolean} options.autoConnect - Auto-connect on mount (default: true)
- * @param {Function} options.onNewIncident - Callback for new incidents
- * @param {Function} options.onCriticalAlert - Callback for critical alerts
- * @param {Function} options.onIncidentResolved - Callback for resolved incidents
- * @param {Function} options.onDeviceQuarantined - Callback for quarantined devices
- * @param {Function} options.onAnyMessage - Callback for any message
- * @returns {{ 
- *   connected: boolean, 
- *   messages: array, 
- *   lastMessage: object | null, 
- *   connect: Function, 
- *   disconnect: Function,
- *   clearMessages: Function 
- * }}
  */
 export function useWebSocketFeed(options = {}) {
   const {
@@ -35,7 +22,8 @@ export function useWebSocketFeed(options = {}) {
     onAnyMessage,
   } = options;
 
-  const [connected, setConnected] = useState(false);
+  // DEMO MODE: Always show as connected
+  const [connected, setConnected] = useState(DEMO_MODE ? true : false);
   const [messages, setMessages] = useState([]);
   const [lastMessage, setLastMessage] = useState(null);
 

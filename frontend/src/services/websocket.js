@@ -2,27 +2,81 @@
  * A.R.C SENTINEL - WebSocket Service
  * ===================================
  * Real-time WebSocket connection for live alerts
+ * DEMO MODE: Simulates WebSocket events locally
  */
 
-const WS_URL = process.env.REACT_APP_WS_URL || 
-  (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-    .replace('https://', 'wss://')
-    .replace('http://', 'ws://');
+import { DEMO_MODE, DEMO_CONFIG } from '../constants';
+
+const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+
+// Log the WebSocket URL for debugging
+console.log('[WebSocket] URL configured:', WS_URL);
 
 let socket = null;
 let reconnectTimeout = null;
 let reconnectAttempts = 0;
+let demoInterval = null;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_BASE = 1000; // Base delay in ms
 
+// Demo mode message handler
+let demoMessageHandler = null;
+let demoConnectHandler = null;
+
+// Demo mode event generator
+function generateDemoEvent() {
+  const eventTypes = [
+    { type: 'new_incident', data: { id: Date.now(), type: 'bruteforce', severity: 'high', source_ip: '192.168.1.' + Math.floor(Math.random() * 255) } },
+    { type: 'critical_alert', data: { id: Date.now(), message: 'Critical threat detected', severity: 'critical', source_ip: '10.0.0.' + Math.floor(Math.random() * 255) } },
+    { type: 'telemetry', data: { cpu: Math.floor(Math.random() * 100), memory: Math.floor(Math.random() * 100), connections: Math.floor(Math.random() * 50) } },
+    { type: 'ml_detection', data: { anomaly_score: (Math.random() * 0.5 + 0.5).toFixed(2), confidence: (Math.random() * 0.3 + 0.7).toFixed(2) } },
+  ];
+  return eventTypes[Math.floor(Math.random() * eventTypes.length)];
+}
+
 /**
- * Connect to WebSocket server
- * @param {Function} onMessageHandler - Callback for incoming messages
- * @param {Function} onConnectHandler - Callback when connected
- * @param {Function} onErrorHandler - Callback for errors
- * @returns {WebSocket}
+ * Connect to WebSocket server (or simulate in demo mode)
  */
 export function connectWebSocket(onMessageHandler, onConnectHandler = null, onErrorHandler = null) {
+  // DEMO MODE: Simulate WebSocket with local events
+  if (DEMO_MODE) {
+    console.warn('🟡 [WebSocket] DEMO MODE - Simulating WebSocket events locally');
+    
+    demoMessageHandler = onMessageHandler;
+    demoConnectHandler = onConnectHandler;
+    
+    // Simulate connection success
+    setTimeout(() => {
+      if (onConnectHandler) {
+        onConnectHandler();
+      }
+    }, 100);
+    
+    // Start generating demo events
+    if (demoInterval) {
+      clearInterval(demoInterval);
+    }
+    
+    demoInterval = setInterval(() => {
+      if (demoMessageHandler) {
+        const event = generateDemoEvent();
+        console.log('[WebSocket DEMO] Generated event:', event.type);
+        demoMessageHandler(event);
+      }
+    }, DEMO_CONFIG.ALERT_INTERVAL);
+    
+    // Return a mock socket object
+    return {
+      readyState: 1, // WebSocket.OPEN
+      close: () => {
+        if (demoInterval) {
+          clearInterval(demoInterval);
+          demoInterval = null;
+        }
+      },
+      send: (data) => console.log('[WebSocket DEMO] Send:', data),
+    };
+  }
   // Close existing connection
   if (socket && socket.readyState !== WebSocket.CLOSED) {
     socket.close();
@@ -90,6 +144,16 @@ export function connectWebSocket(onMessageHandler, onConnectHandler = null, onEr
  * Close WebSocket connection
  */
 export function closeWebSocket() {
+  // DEMO MODE: Clear interval
+  if (DEMO_MODE) {
+    if (demoInterval) {
+      clearInterval(demoInterval);
+      demoInterval = null;
+    }
+    console.log('[WebSocket DEMO] Connection closed');
+    return;
+  }
+
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
@@ -107,9 +171,9 @@ export function closeWebSocket() {
 
 /**
  * Get current WebSocket connection state
- * @returns {'connecting' | 'open' | 'closing' | 'closed' | 'none'}
  */
 export function getWebSocketState() {
+  if (DEMO_MODE) return 'open';
   if (!socket) return 'none';
   
   switch (socket.readyState) {
@@ -128,18 +192,21 @@ export function getWebSocketState() {
 
 /**
  * Check if WebSocket is connected
- * @returns {boolean}
  */
 export function isWebSocketConnected() {
+  if (DEMO_MODE) return true;
   return socket && socket.readyState === WebSocket.OPEN;
 }
 
 /**
  * Send message through WebSocket
- * @param {object} data - Data to send
- * @returns {boolean} - Whether message was sent
  */
 export function sendWebSocketMessage(data) {
+  if (DEMO_MODE) {
+    console.log('[WebSocket DEMO] Message sent:', data);
+    return true;
+  }
+  
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(data));
     return true;

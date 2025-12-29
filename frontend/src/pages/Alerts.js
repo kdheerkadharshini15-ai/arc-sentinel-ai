@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, Filter, RefreshCw } from 'lucide-react';
 import { getEvents } from '../services';
+import { DEMO_MODE } from '../constants';
 
 export default function Alerts() {
   const [events, setEvents] = useState([]);
@@ -9,6 +10,22 @@ export default function Alerts() {
   const [typeFilter, setTypeFilter] = useState('all');
 
   const loadEvents = useCallback(async () => {
+    // DEMO MODE: Load only from localStorage (populated by simulator)
+    if (DEMO_MODE) {
+      let storedEvents = JSON.parse(localStorage.getItem('arc_demo_events') || '[]');
+      
+      // Apply filters
+      if (severityFilter !== 'all') {
+        storedEvents = storedEvents.filter(e => e.severity === severityFilter);
+      }
+      if (typeFilter !== 'all') {
+        storedEvents = storedEvents.filter(e => (e.type || e.event_type) === typeFilter);
+      }
+      
+      setEvents(storedEvents.slice(0, 200));
+      return;
+    }
+    
     setLoading(true);
     try {
       const result = await getEvents({

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Activity, AlertTriangle, Shield, TrendingUp, Eye } from 'lucide-react';
 import { getIncidentMetrics, getRecentEvents, getActiveIncidents } from '../services';
 import { useWebSocketFeed } from '../hooks/useWebSocketFeed';
+import { DEMO_MODE } from '../constants';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -16,6 +17,25 @@ export default function Dashboard() {
 
   // Load dashboard data (non-blocking)
   const loadData = useCallback(async () => {
+    // DEMO MODE: Load only from localStorage (populated by simulator)
+    if (DEMO_MODE) {
+      const storedIncidents = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      const storedEvents = JSON.parse(localStorage.getItem('arc_demo_events') || '[]');
+      const activeCount = storedIncidents.filter(i => i.status === 'open' || i.status === 'active' || i.status === 'investigating').length;
+      const mlFlagged = storedIncidents.filter(i => i.ml_flagged).length;
+      
+      setStats({
+        total_events: storedEvents.length,
+        total_incidents: storedIncidents.length,
+        active_incidents: activeCount,
+        ml_flagged: mlFlagged,
+      });
+      
+      setIncidents(storedIncidents.filter(i => i.status === 'open' || i.status === 'active' || i.status === 'investigating').slice(0, 5));
+      setEvents(storedEvents.slice(0, 10));
+      return;
+    }
+    
     try {
       // Fire all requests in parallel - don't block UI
       const [metricsResult, eventsResult, incidentsResult] = await Promise.allSettled([

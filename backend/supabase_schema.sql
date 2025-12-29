@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_incidents_threat_type ON public.incidents(threat_
 
 CREATE TABLE IF NOT EXISTS public.forensic_reports (
     id VARCHAR(32) PRIMARY KEY DEFAULT substring(md5(random()::text), 1, 16),
-    incident_id VARCHAR(32) REFERENCES public.incidents(id) ON DELETE CASCADE,
+    incident_id VARCHAR(32) NOT NULL,
     processes JSONB DEFAULT '[]',
     connections JSONB DEFAULT '[]',
     packet_data JSONB DEFAULT '[]',
@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS public.forensic_reports (
 
 -- Create index for incident lookups
 CREATE INDEX IF NOT EXISTS idx_forensic_reports_incident_id ON public.forensic_reports(incident_id);
+
+-- Add foreign key constraint with cascade delete
+-- This ensures forensic reports are deleted when their parent incident is deleted
+ALTER TABLE public.forensic_reports
+DROP CONSTRAINT IF EXISTS fk_forensic_reports_incident;
+
+ALTER TABLE public.forensic_reports
+ADD CONSTRAINT fk_forensic_reports_incident
+FOREIGN KEY (incident_id) REFERENCES public.incidents(id)
+ON DELETE CASCADE;
 
 -- ===========================================
 -- ML MODEL TABLE

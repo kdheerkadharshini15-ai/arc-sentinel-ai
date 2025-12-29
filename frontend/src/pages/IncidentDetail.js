@@ -4,6 +4,7 @@ import { Shield, CheckCircle, ArrowLeft, FileText, Activity, RefreshCw, Sparkles
 import { getIncidentById, resolveIncident } from '../services/incidents';
 import { getForensicReport, getGeminiSummary, parseForensicData } from '../services/reports';
 import { useToast } from '../hooks/use-toast';
+import { DEMO_MODE, DEMO_FORENSIC_REPORT } from '../constants';
 
 export default function IncidentDetail() {
   const { id } = useParams();
@@ -19,6 +20,55 @@ export default function IncidentDetail() {
 
   const loadIncident = useCallback(async () => {
     setLoading(true);
+    
+    // DEMO MODE: Load from localStorage only
+    if (DEMO_MODE) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Find incident in localStorage
+      const storedIncidents = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      const foundIncident = storedIncidents.find(i => String(i.id) === String(id));
+      
+      if (!foundIncident) {
+        setLoading(false);
+        return;
+      }
+      
+      setIncident({
+        ...foundIncident,
+        timestamp: foundIncident.timestamp || foundIncident.created_at || new Date().toISOString(),
+      });
+      
+      // Set forensic report from stored data or generate fresh
+      const storedForensics = foundIncident.forensics || DEMO_FORENSIC_REPORT;
+      setReport({
+        forensic_data: {
+          system_info: storedForensics.system_info,
+          suspicious_indicators: storedForensics.indicators,
+          recommended_actions: storedForensics.recommendations,
+          processes: storedForensics.processes,
+          connections: storedForensics.connections,
+        }
+      });
+      
+      setForensicData({
+        processes: (storedForensics.processes || []).map(p => ({
+          pid: p.pid,
+          name: p.name,
+          cpu: p.cpu || p.cpu_percent,
+        })),
+        connections: (storedForensics.connections || []).map(c => ({
+          laddr: c.laddr || c.local_address,
+          raddr: c.raddr || c.remote_address,
+          status: c.status,
+        })),
+        summary: storedForensics.summary || '',
+      });
+      
+      setLoading(false);
+      return;
+    }
+    
     try {
       const [incidentRes, reportRes] = await Promise.all([
         getIncidentById(id),
@@ -46,6 +96,25 @@ export default function IncidentDetail() {
 
   const handleResolve = async () => {
     setResolving(true);
+    
+    // DEMO MODE: Resolve locally
+    if (DEMO_MODE) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Update localStorage
+      const stored = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      const updated = stored.map(i => String(i.id) === String(id) ? { ...i, status: 'resolved' } : i);
+      localStorage.setItem('arc_demo_incidents', JSON.stringify(updated));
+      
+      toast({
+        title: 'Incident Resolved',
+        description: 'The incident has been marked as resolved.',
+      });
+      navigate('/incidents');
+      setResolving(false);
+      return;
+    }
+    
     try {
       const result = await resolveIncident(id, notes);
       
@@ -74,8 +143,147 @@ export default function IncidentDetail() {
     }
   };
 
+  // Generate dynamic AI summary based on incident data
+  const generateAISummary = (inc, forensics) => {
+    const threatName = (inc.type || inc.threat_type || 'unknown').replace('_', ' ');
+    const severity = inc.severity || 'high';
+    const source = inc.source_ip || 'unknown source';
+    
+    const summaries = {
+      bruteforce: `🔴 CRITICAL SECURITY ALERT - BRUTE FORCE ATTACK
+
+A sophisticated brute force authentication attack has been detected originating from ${source}. The attack shows systematic password guessing patterns targeting user accounts.
+
+**Attack Characteristics:**
+- Multiple failed login attempts detected in rapid succession
+- Targeting SSH/RDP and web application authentication
+- Attack velocity: ~500 attempts per minute
+- Dictionary-based attack pattern identified
+
+**Risk Assessment:** ${severity.toUpperCase()}
+The attacker appears to be using a credential stuffing technique with leaked password databases. Immediate action is required to prevent unauthorized access.
+
+**AI Recommendation:** Enable account lockouts, block source IP at firewall, and enable multi-factor authentication for all affected accounts.`,
+
+      ddos: `🔴 NETWORK THREAT DETECTED - DDoS ATTACK
+
+A Distributed Denial of Service attack has been identified targeting your infrastructure from ${source} and associated botnet nodes.
+
+**Attack Characteristics:**
+- Traffic volume: 2.5 Gbps sustained flood
+- Attack type: SYN flood with amplification
+- Targeted services: HTTP/HTTPS endpoints
+- Duration: Active and ongoing
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Infrastructure stability is compromised. Service degradation detected across multiple endpoints.
+
+**AI Recommendation:** Enable rate limiting, activate CDN/DDoS protection, and consider upstream filtering via ISP coordination.`,
+
+      sql_injection: `🔴 APPLICATION SECURITY BREACH - SQL INJECTION
+
+SQL injection attack detected from ${source} targeting database-connected web applications.
+
+**Attack Characteristics:**
+- Malicious SQL payloads in HTTP parameters
+- Attempting to extract sensitive database records
+- Union-based and error-based injection techniques observed
+- Targeting user authentication and data tables
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Potential data breach in progress. Database integrity may be compromised.
+
+**AI Recommendation:** Block source IP immediately, review WAF rules, patch vulnerable application code, and audit database for unauthorized access.`,
+
+      malware: `🔴 ENDPOINT THREAT DETECTED - MALWARE EXECUTION
+
+Malware activity has been detected on the monitored endpoint, originating from activity related to ${source}.
+
+**Attack Characteristics:**
+- Suspicious process execution detected
+- Outbound C2 communication attempts
+- File system modifications in system directories
+- Persistence mechanism installation attempted
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Host compromise confirmed. Lateral movement risk is high.
+
+**AI Recommendation:** Isolate affected host immediately, terminate malicious processes, run full EDR scan, and check for persistence mechanisms.`,
+
+      exfiltration: `🔴 DATA SECURITY ALERT - DATA EXFILTRATION
+
+Unauthorized data transfer detected from internal systems to external destination ${source}.
+
+**Attack Characteristics:**
+- Large volume outbound data transfer detected
+- Unusual port/protocol usage for data egress
+- Encryption used to evade detection
+- Targeting sensitive business data directories
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Confirmed data breach. Sensitive information may have been compromised.
+
+**AI Recommendation:** Block destination IP/domain immediately, identify scope of leaked data, preserve logs for forensic analysis, and prepare breach notification.`,
+
+      privilege_escalation: `🔴 ACCESS CONTROL BREACH - PRIVILEGE ESCALATION
+
+Unauthorized privilege escalation detected involving ${source} and local system accounts.
+
+**Attack Characteristics:**
+- Exploitation of local vulnerability for elevated access
+- Admin/root privilege obtained by non-privileged user
+- Suspicious sudo/admin group modifications
+- System configuration changes detected
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Full system compromise possible. Attacker has elevated access to critical resources.
+
+**AI Recommendation:** Revoke elevated privileges immediately, reset all affected credentials, audit recent admin actions, and review group memberships.`,
+    };
+
+    return summaries[inc.type] || summaries[inc.threat_type] || `🔴 SECURITY INCIDENT DETECTED
+
+A ${threatName} security incident has been detected with ${severity} severity, originating from ${source}.
+
+**Incident Summary:**
+The A.R.C. SENTINEL ML engine has flagged this activity as malicious with ${inc.confidence || '95%'} confidence. Automated forensic collection has gathered system state, process information, and network connection data.
+
+**Risk Assessment:** ${severity.toUpperCase()}
+Immediate investigation and response recommended.
+
+**AI Recommendation:** Follow incident response procedures, isolate affected systems if needed, and preserve evidence for forensic analysis.`;
+  };
+
   const handleGenerateSummary = async () => {
     setGeneratingSummary(true);
+    
+    // DEMO MODE: Generate dynamic summary based on incident
+    if (DEMO_MODE) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const summary = generateAISummary(incident, forensicData);
+      setForensicData(prev => ({
+        ...prev,
+        summary: summary,
+      }));
+      
+      // Also update localStorage with the summary
+      const stored = JSON.parse(localStorage.getItem('arc_demo_incidents') || '[]');
+      const updated = stored.map(i => {
+        if (String(i.id) === String(id)) {
+          return { ...i, forensics: { ...i.forensics, summary: summary } };
+        }
+        return i;
+      });
+      localStorage.setItem('arc_demo_incidents', JSON.stringify(updated));
+      
+      toast({
+        title: 'AI Summary Generated',
+        description: 'Gemini analysis complete.',
+      });
+      setGeneratingSummary(false);
+      return;
+    }
+    
     try {
       const result = await getGeminiSummary(id);
       

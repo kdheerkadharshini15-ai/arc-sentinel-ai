@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Shield, Lock, Mail, UserPlus, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { DEMO_MODE } from '../constants';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,11 +16,34 @@ export default function Login() {
   const { login, signup, resetPassword } = useAuth();
   const navigate = useNavigate();
 
+  // DEMO MODE: Auto-login on mount
+  useEffect(() => {
+    if (DEMO_MODE) {
+      console.log('🟡 [Login] DEMO MODE - Auto-login enabled');
+    }
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     setLoading(true);
+    
+    // DEMO MODE: Accept any credentials
+    if (DEMO_MODE) {
+      console.log('🟡 [Login] DEMO MODE - Auto-accepting credentials');
+      localStorage.setItem('arc_token', 'demo_token_' + Date.now());
+      localStorage.setItem('arc_refresh_token', 'demo_refresh_' + Date.now());
+      localStorage.setItem('arc_user', JSON.stringify({ 
+        id: 1, 
+        email: email || 'demo@arcsentinel.io', 
+        role: 'admin' 
+      }));
+      setLoading(false);
+      window.location.href = '/';
+      return;
+    }
+    
     try {
       const result = await login(email, password);
       console.log('[LOGIN] Success:', result);
@@ -50,6 +74,16 @@ export default function Login() {
     }
 
     setLoading(true);
+    
+    // DEMO MODE: Accept any signup
+    if (DEMO_MODE) {
+      console.log('🟡 [Signup] DEMO MODE - Auto-accepting signup');
+      setSuccess('Account created! You can now login.');
+      setIsSignup(false);
+      setLoading(false);
+      return;
+    }
+    
     try {
       const result = await signup(email, password);
       setSuccess(result.message || 'Account created! Please check your email to verify your account.');

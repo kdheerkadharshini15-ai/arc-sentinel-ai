@@ -173,17 +173,19 @@ class IncidentResolveRequest(BaseModel):
 # ============================================================================
 
 class AttackSimulationRequest(BaseModel):
-    attack_type: str = Field(..., alias="type", description="Type of attack to simulate")
+    attack_type: str = Field(..., description="Type of attack to simulate")
     target: Optional[str] = "192.168.1.100"
     intensity: Optional[int] = Field(default=1, ge=1, le=10)
     
     class Config:
         populate_by_name = True
     
-    def __init__(self, **data):
-        if 'type' in data and 'attack_type' not in data:
-            data['attack_type'] = data.pop('type')
-        super().__init__(**data)
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        if isinstance(obj, dict) and 'type' in obj and 'attack_type' not in obj:
+            obj = dict(obj)
+            obj['attack_type'] = obj.pop('type')
+        return super().model_validate(obj, *args, **kwargs)
 
 
 class AttackSimulationResponse(BaseModel):

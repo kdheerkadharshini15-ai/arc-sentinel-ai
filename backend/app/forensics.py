@@ -2,6 +2,7 @@
 A.R.C SENTINEL - Forensics Engine
 ==================================
 System forensics capture using psutil and mock packet data
+DEMO MODE: Returns hardcoded data when enabled
 """
 
 import psutil
@@ -10,6 +11,13 @@ from datetime import datetime
 import json
 import random
 import hashlib
+
+# Import demo mode config
+try:
+    from app.config.demo_mode import DEMO_MODE, DEMO_FORENSIC_REPORT
+except ImportError:
+    DEMO_MODE = False
+    DEMO_FORENSIC_REPORT = {}
 
 
 class ForensicsEngine:
@@ -30,6 +38,28 @@ class ForensicsEngine:
         Capture a complete forensic snapshot for an incident.
         Includes processes, network connections, and mock packet data.
         """
+        # DEMO MODE: Return hardcoded forensic data
+        if DEMO_MODE:
+            return {
+                "snapshot_id": hashlib.md5(f"{datetime.utcnow().isoformat()}".encode()).hexdigest()[:16],
+                "captured_at": datetime.utcnow().isoformat(),
+                "incident_type": incident_info.get("threat_type", "unknown"),
+                "system_info": DEMO_FORENSIC_REPORT.get("system_info", {}),
+                "processes": DEMO_FORENSIC_REPORT.get("processes", []),
+                "connections": DEMO_FORENSIC_REPORT.get("connections", []),
+                "packet_data": self._generate_mock_packets(event, incident_info),
+                "suspicious_indicators": DEMO_FORENSIC_REPORT.get("indicators", []),
+                "recommended_actions": DEMO_FORENSIC_REPORT.get("recommendations", []),
+                "gemini_summary": DEMO_FORENSIC_REPORT.get("summary", ""),
+                "confidence": DEMO_FORENSIC_REPORT.get("confidence", "94%"),
+                "trigger_event": {
+                    "id": event.get("id"),
+                    "type": event.get("type"),
+                    "source_ip": event.get("source_ip"),
+                    "severity": event.get("severity")
+                }
+            }
+        
         self.capture_count += 1
         
         snapshot = {

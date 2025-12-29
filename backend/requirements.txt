@@ -26,8 +26,9 @@ joblib>=1.3.0
 # System Forensics
 psutil>=5.9.0
 
-# Google Gemini AI
+# Google Gemini AI (both packages for compatibility)
 google-generativeai>=0.3.0
+google-genai>=1.0.0
 
 # Environment & Utils
 python-dotenv>=1.0.0
