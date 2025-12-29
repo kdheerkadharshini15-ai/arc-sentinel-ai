@@ -581,7 +581,7 @@ async def list_events(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     ml_flagged: Optional[bool] = None,
-    user: Dict = Depends(get_current_user)
+    user: Optional[Dict] = Depends(get_optional_user)
 ):
     """Get list of events with optional filters including date range"""
     start_time = None
@@ -621,7 +621,7 @@ async def list_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     threat_type: Optional[str] = None,
-    user: Dict = Depends(get_current_user)
+    user: Optional[Dict] = Depends(get_optional_user)
 ):
     """Get list of incidents with optional filters and dashboard summary"""
     incidents = await get_incidents(limit=limit, status=status)
@@ -648,7 +648,7 @@ async def list_incidents(
 
 
 @app.get("/api/incident/{incident_id}")
-async def get_incident(incident_id: str, user: Dict = Depends(get_current_user)):
+async def get_incident(incident_id: str, user: Optional[Dict] = Depends(get_optional_user)):
     """Get single incident details with forensic report"""
     incident = await get_incident_by_id(incident_id)
     if not incident:
@@ -749,7 +749,7 @@ async def mark_investigating(
 
 
 @app.get("/api/incidents/counts")
-async def get_incident_counts(user: Dict = Depends(get_current_user)):
+async def get_incident_counts(user: Optional[Dict] = Depends(get_optional_user)):
     """Get dashboard metrics counts"""
     return await get_stats()
 
@@ -759,7 +759,7 @@ async def get_incident_counts(user: Dict = Depends(get_current_user)):
 # ============================================================================
 
 @app.get("/api/stats", response_model=StatsResponse)
-async def get_statistics(user: Dict = Depends(get_current_user)):
+async def get_statistics(user: Optional[Dict] = Depends(get_optional_user)):
     """Get dashboard statistics"""
     return await get_stats()
 
@@ -771,7 +771,7 @@ async def get_statistics(user: Dict = Depends(get_current_user)):
 @app.get("/api/reports")
 async def list_reports(
     limit: int = Query(100, ge=1, le=500),
-    user: Dict = Depends(get_current_user)
+    user: Optional[Dict] = Depends(get_optional_user)
 ):
     """Get all forensic reports"""
     reports = await get_all_forensic_reports(limit=limit)
@@ -779,7 +779,7 @@ async def list_reports(
 
 
 @app.get("/api/report/{incident_id}")
-async def get_report(incident_id: str, user: Dict = Depends(get_current_user)):
+async def get_report(incident_id: str, user: Optional[Dict] = Depends(get_optional_user)):
     """Get forensic report for an incident"""
     report = await get_forensic_report(incident_id)
     if not report:
@@ -872,7 +872,7 @@ async def train_ml_model(user: Dict = Depends(get_current_user)):
 
 
 @app.get("/api/ml/status")
-async def get_ml_status(user: Dict = Depends(get_current_user)):
+async def get_ml_status(user: Optional[Dict] = Depends(get_optional_user)):
     """Get ML model status"""
     return {
         "is_trained": ml_detector.is_trained,

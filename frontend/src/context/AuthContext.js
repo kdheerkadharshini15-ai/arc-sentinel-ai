@@ -139,19 +139,32 @@ export function AuthProvider({ children }) {
 
   // Setup axios interceptor for token refresh
   useEffect(() => {
+    let isRefreshing = false;
+    
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
         
-        // If 401 and not already retrying, try to refresh token
-        if (error.response?.status === 401 && !originalRequest._retry && refreshToken) {
+        // If 401 and not already retrying, try to refresh token (but only once)
+        if (error.response?.status === 401 && !originalRequest._retry && refreshToken && !isRefreshing) {
           originalRequest._retry = true;
-          const refreshed = await refresh();
+          isRefreshing = true;
           
-          if (refreshed) {
-            originalRequest.headers.Authorization = `Bearer ${localStorage.getItem('arc_token')}`;
-            return axios(originalRequest);
+          try {
+            const refreshed = await refresh();
+            isRefreshing = false;
+            
+            if (refreshed) {
+              originalRequest.headers.Authorization = `Bearer ${localStorage.getItem('arc_token')}`;
+              return axios(originalRequest);
+            }
+          } catch (refreshError) {
+            isRefreshing = false;
+            // Clear tokens on refresh failure to prevent loops
+            localStorage.removeItem('arc_token');
+            localStorage.removeItem('arc_refresh_token');
+            localStorage.removeItem('arc_user');
           }
         }
         
