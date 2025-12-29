@@ -7,7 +7,12 @@
 
 import { DEMO_MODE, DEMO_CONFIG } from '../constants';
 
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+// WebSocket URL - use same origin in production (combined frontend+backend deployment)
+const WS_URL = process.env.REACT_APP_WS_URL || (
+  process.env.NODE_ENV === 'production'
+    ? (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host
+    : 'ws://localhost:8000'
+);
 
 // Log the WebSocket URL for debugging
 console.log('[WebSocket] URL configured:', WS_URL);

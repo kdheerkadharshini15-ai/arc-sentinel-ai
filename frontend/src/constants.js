@@ -6,7 +6,8 @@
 
 // 🚨 DEMO MODE: Set to TRUE for hackathon presentation
 // When true, all backend calls return hardcoded data
-export const DEMO_MODE = true;
+// Set to FALSE for production with real backend
+export const DEMO_MODE = process.env.REACT_APP_DEMO_MODE === 'true' || false;
 
 // Demo data configuration
 export const DEMO_CONFIG = {

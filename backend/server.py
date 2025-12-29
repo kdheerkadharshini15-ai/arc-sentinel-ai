@@ -11,6 +11,8 @@ import os
 import uvicorn
 from app.config import settings
 
+# Export app for uvicorn to use: uvicorn server:app
+from app.main import app
 
 if __name__ == "__main__":
     # Get port from environment variable (for Render) or use settings

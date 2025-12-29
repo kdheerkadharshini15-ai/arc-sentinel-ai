@@ -16,8 +16,12 @@ import {
   DEMO_ML_STATUS 
 } from '../constants';
 
-// Base URL from environment
-const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Base URL - use same origin in production (combined frontend+backend deployment)
+const BASE_URL = process.env.REACT_APP_API_URL || (
+  process.env.NODE_ENV === 'production' 
+    ? '' // Same origin - no base URL needed
+    : 'http://localhost:8000'
+);
 
 // Demo mode mock responses
 const DEMO_MOCKS = {
